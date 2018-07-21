@@ -66,27 +66,24 @@ class WebsocketClient(object):
             message = message.encode('ascii')
             hmac_key = base64.b64decode(self.api_secret)
             signature = hmac.new(hmac_key, message, hashlib.sha256)
-            signature_b64 = signature.digest().encode('base64').rstrip('\n')
+            signature_b64 = base64.b64encode(signature.digest()).decode('utf-8').rstrip('\n')
             sub_params['signature'] = signature_b64
             sub_params['key'] = self.api_key
             sub_params['passphrase'] = self.api_passphrase
             sub_params['timestamp'] = timestamp
 
         self.ws = create_connection(self.url)
-        self.ws.send(json.dumps(sub_params))
 
-        if self.type == "heartbeat":
-            sub_params = {"type": "heartbeat", "on": True}
-        else:
-            sub_params = {"type": "heartbeat", "on": False}
         self.ws.send(json.dumps(sub_params))
 
     def _listen(self):
         while not self.stop:
             try:
-                if int(time.time() % 30) == 0:
+                start_t = 0
+                if time.time() - start_t >= 30:
                     # Set a 30 second ping to keep connection alive
                     self.ws.ping("keepalive")
+                    start_t = time.time()
                 data = self.ws.recv()
                 msg = json.loads(data)
             except ValueError as e:
@@ -97,8 +94,6 @@ class WebsocketClient(object):
                 self.on_message(msg)
 
     def _disconnect(self):
-        if self.type == "heartbeat":
-            self.ws.send(json.dumps({"type": "heartbeat", "on": False}))
         try:
             if self.ws:
                 self.ws.close()
